@@ -21,17 +21,6 @@
 void showMatrix(double *mat, int m, int n);
 
 /*!
- * Fill an array with a value.
- *
- * Fills the array arr of size n with value value.
- *
- * \param arr [out] array to fill
- * \param n [in] array size
- * \param value [in] value to put in the array
- */
-void memfill(int *arr, int n, int value);
-
-/*!
  * Permute two lines of a matrix.
  *
  * Exchanges line i with line j in a square matrix of size n.

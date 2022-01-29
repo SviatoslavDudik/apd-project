@@ -56,12 +56,6 @@ void permute(double *A, double *tmp, int n, int i, int j) {
 	memcpy(A + j*n, tmp, sizeof(double)*n);
 }
 
-void memfill(int *arr, int n, int value) {
-	int *arrdest = arr + n;
-	while (arr < arrdest)
-		*arr++ = value;
-}
-
 void luDecomposition(double *A, int n, int *P) {
 	int i, j, k, maxIndex, startCol;
 	int root = 0, size, rank, tag = 0, master;
