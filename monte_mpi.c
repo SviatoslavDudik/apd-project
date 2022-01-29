@@ -4,6 +4,7 @@
 #include <time.h>
 
 #define RADIUS 1000
+#define EXECUTIONS 1000000
 
 int main(int argc, char **argv) {
 	int root = 0, rank, size;
@@ -20,7 +21,7 @@ int main(int argc, char **argv) {
 	if (rank == root) {
 		startTime = MPI_Wtime();
 	}
-	for (i = 0; i < 1000 * n / size; i++) {
+	for (i = 0; i < EXECUTIONS * n / size; i++) {
 		x = (double)(random() % (RADIUS*1000))/1000;
 		y = (double)(random() % (RADIUS*1000))/1000;
 		if (x*x + y*y < RADIUS*RADIUS) {
@@ -30,7 +31,7 @@ int main(int argc, char **argv) {
 	MPI_Reduce(&count, &countTotal, 1, MPI_LONG, MPI_SUM, root, MPI_COMM_WORLD);
 
 	if (rank == root) {
-		pi = (double) 4 * countTotal / (1000 * n);
+		pi = (double) 4 * countTotal / (EXECUTIONS * n);
 		endTime = MPI_Wtime();
 		printf("%lf\n", endTime - startTime);
 	}
