@@ -7,6 +7,7 @@
 
 #define MIN -10
 #define MAX 10
+#define MIN_CHUNK 100
 #define abs(x) ((x) >= 0 ? (x) : -(x))
 
 void showMatrix(double *mat, int m, int n);
@@ -100,21 +101,29 @@ void luDecomposition(double *A, int n, int *P) {
 			P[i] = maxIndex;
 		}
 
-		MPI_Bcast(A + i*n + i, n - i, MPI_DOUBLE, root, MPI_COMM_WORLD);
 		rows = n - i - 1;
 		chunk = rows / (size - 1);
-		memfill(counts, size, chunk);
-		counts[root] = rows % (size - 1);
-		displs[0] = 0;
-		for (j = 1; j < size; j++) {
-			displs[j] = displs[j-1] + counts[j-1];
+		if (chunk > MIN_CHUNK) {
+			memfill(counts, size, chunk);
+			counts[root] = rows % (size - 1);
+			displs[0] = 0;
+			for (j = 1; j < size; j++) {
+				displs[j] = displs[j-1] + counts[j-1];
+			}
+			start = A + (i+1) * n;
+			MPI_Bcast(A + i*n + i, n - i, MPI_DOUBLE, root, MPI_COMM_WORLD);
+			if (rank == root){
+				MPI_Scatterv(start, counts, displs, ROW, MPI_IN_PLACE, counts[rank], ROW, root, MPI_COMM_WORLD);
+			}
+			else {
+				MPI_Scatterv(MPI_IN_PLACE, counts, displs, ROW, start, counts[rank], ROW, root, MPI_COMM_WORLD);
+			}
 		}
-		start = A + (i+1) * n;
-
-		if (rank == root)
-			MPI_Scatterv(start, counts, displs, ROW, MPI_IN_PLACE, counts[rank], ROW, root, MPI_COMM_WORLD);
-		else
-			MPI_Scatterv(MPI_IN_PLACE, counts, displs, ROW, start, counts[rank], ROW, root, MPI_COMM_WORLD);
+		else {
+			memset(counts, 0, size*sizeof(int));
+			memset(displs, 0, size*sizeof(int));
+			counts[root] = rows;
+		}
 		#pragma omp parallel for private(j,k,row) shared(n,i,A,counts,displs,rank)
 		for (j = 0; j < counts[rank]; j++) {
 			row = (i + 1) + displs[rank] + j;
@@ -123,10 +132,14 @@ void luDecomposition(double *A, int n, int *P) {
 				A[row*n + k] -= A[row*n + i] * A[i*n + k];
 			}
 		}
-		if (rank == root)
-			MPI_Gatherv(MPI_IN_PLACE, counts[rank], ROW, start, counts, displs, ROW, root, MPI_COMM_WORLD);
-		else
-			MPI_Gatherv(start, counts[rank], ROW, MPI_IN_PLACE, counts, displs, ROW, root, MPI_COMM_WORLD);
+		if (chunk > MIN_CHUNK) {
+			if (rank == root) {
+				MPI_Gatherv(MPI_IN_PLACE, counts[rank], ROW, start, counts, displs, ROW, root, MPI_COMM_WORLD);
+			}
+			else {
+				MPI_Gatherv(start, counts[rank], ROW, MPI_IN_PLACE, counts, displs, ROW, root, MPI_COMM_WORLD);
+			}
+		}
 	}
 	MPI_Type_free(&ROW);
 	free(tmp);
