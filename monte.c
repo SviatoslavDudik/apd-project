@@ -21,7 +21,7 @@ int main(int argc, char **argv) {
 	if (rank == root) {
 		startTime = MPI_Wtime();
 	}
-	#pragma omp parallel for private(i,x,y) shared(n,size) reduction(+:count) schedule(static, 1000)
+	#pragma omp parallel for private(i,x,y) shared(n,size) reduction(+:count)
 	for (i = 0; i < 1000 * n / size; i++) {
 		x = (double)(random() % (RADIUS*1000))/1000;
 		y = (double)(random() % (RADIUS*1000))/1000;
@@ -34,8 +34,7 @@ int main(int argc, char **argv) {
 	if (rank == root) {
 		pi = (double) 4 * countTotal / (1000 * n);
 		endTime = MPI_Wtime();
-		printf("pi = %lf\n", pi);
-		printf("time = %lf\n", endTime - startTime);
+		printf("%lf\n", endTime - startTime);
 	}
 	MPI_Finalize();
 	return EXIT_SUCCESS;

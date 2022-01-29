@@ -32,8 +32,7 @@ int main(int argc, char **argv) {
 	if (rank == root) {
 		pi = (double) 4 * countTotal / (1000 * n);
 		endTime = MPI_Wtime();
-		printf("pi = %lf\n", pi);
-		printf("time = %lf\n", endTime - startTime);
+		printf("%lf\n", endTime - startTime);
 	}
 	MPI_Finalize();
 	return EXIT_SUCCESS;
