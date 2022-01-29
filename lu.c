@@ -7,7 +7,6 @@
 
 #define MIN -10
 #define MAX 10
-#define MIN_CHUNK 100
 #define abs(x) ((x) >= 0 ? (x) : -(x))
 
 void showMatrix(double *mat, int m, int n);
@@ -41,7 +40,7 @@ int main(int argc, char **argv) {
 	luDecomposition(mat, n, perm);
 	if (rank == root) {
 		endTime = MPI_Wtime();
-		printf("Time: %lf s\n", endTime - startTime);
+		printf("%lf\n", endTime - startTime);
 	}
 	MPI_Finalize();
 
@@ -55,7 +54,7 @@ void showMatrix(double *mat, int m, int n) {
 		for (j = 0; j < n; j++) {
 			printf("%lf ", mat[i*n + j]);
 		}
-		printf("\n");
+		printf(";\n");
 	}
 }
 
@@ -73,22 +72,38 @@ void memfill(int *arr, int n, int value) {
 }
 
 void luDecomposition(double *A, int n, int *P) {
-	int i, j, k, maxIndex, row;
-	int root = 0, size, rank;
-	double maxValue, *tmp, *start;
-	int *counts, *displs, rows, chunk;
-	MPI_Datatype ROW;
-	MPI_Type_contiguous(n, MPI_DOUBLE, &ROW);
-	MPI_Type_commit(&ROW);
+	int i, j, k, maxIndex, startCol;
+	int root = 0, size, rank, tag = 0, master;
+	double maxValue, *tmp;
+	MPI_Datatype column_t;
+	MPI_Type_vector(n, 1, n, MPI_DOUBLE, &column_t);
+	MPI_Type_commit(&column_t);
 
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
+	/* cyclic distribution of columns */
+	if (rank == root) {
+		j = 0;
+		for (i = 0; i < n; i++) {
+			if (j != rank) {
+				MPI_Send(A + i, 1, column_t, j, tag, MPI_COMM_WORLD);
+			}
+			if (++j == size) j = 0;
+		}
+	} else {
+		for (i = rank; i < n; i += size) {
+			MPI_Recv(A + i, 1, column_t, root, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		}
+	}
+
+	for (i = 0; i < n; i++)
+		P[i] = i;
+
 	tmp = malloc(sizeof(double) * n);
-	counts = malloc(sizeof(int) * size);
-	displs = malloc(sizeof(int) * size);
 	for (i = 0; i < n; i++) {
-		if (rank == root) {
+		master = i % size;
+		if (master == rank) {
 			maxValue = abs(A[i*n + i]);
 			maxIndex = i;
 			for (j = i; j < n; j++) {
@@ -97,52 +112,45 @@ void luDecomposition(double *A, int n, int *P) {
 					maxIndex = j;
 				}
 			}
-			permute(A, tmp, n, i, maxIndex);
-			P[i] = maxIndex;
 		}
+		MPI_Bcast(&maxIndex, 1, MPI_INT, master, MPI_COMM_WORLD);
 
-		rows = n - i - 1;
-		chunk = rows / (size - 1);
-		if (chunk > MIN_CHUNK) {
-			memfill(counts, size, chunk);
-			counts[root] = rows % (size - 1);
-			displs[0] = 0;
-			for (j = 1; j < size; j++) {
-				displs[j] = displs[j-1] + counts[j-1];
-			}
-			start = A + (i+1) * n;
-			MPI_Bcast(A + i*n + i, n - i, MPI_DOUBLE, root, MPI_COMM_WORLD);
-			if (rank == root){
-				MPI_Scatterv(start, counts, displs, ROW, MPI_IN_PLACE, counts[rank], ROW, root, MPI_COMM_WORLD);
-			}
-			else {
-				MPI_Scatterv(MPI_IN_PLACE, counts, displs, ROW, start, counts[rank], ROW, root, MPI_COMM_WORLD);
-			}
+		permute(A, tmp, n, i, maxIndex);
+		k = P[i];
+		P[i] = P[maxIndex];
+		P[maxIndex] = k;
+
+		if (master == rank) {
+			//#pragma omp parallel for shared(A,n,i) private(j)
+			for (j = i + 1; j < n; j++)
+				A[j*n + i] /= A[i*n + i];
 		}
-		else {
-			memset(counts, 0, size*sizeof(int));
-			memset(displs, 0, size*sizeof(int));
-			counts[root] = rows;
-		}
-		#pragma omp parallel for private(j,k,row) shared(n,i,A,counts,displs,rank)
-		for (j = 0; j < counts[rank]; j++) {
-			row = (i + 1) + displs[rank] + j;
-			A[row*n + i] /= A[i*n + i];
-			for (k = i + 1; k < n; k++) {
-				A[row*n + k] -= A[row*n + i] * A[i*n + k];
-			}
-		}
-		if (chunk > MIN_CHUNK) {
-			if (rank == root) {
-				MPI_Gatherv(MPI_IN_PLACE, counts[rank], ROW, start, counts, displs, ROW, root, MPI_COMM_WORLD);
-			}
-			else {
-				MPI_Gatherv(start, counts[rank], ROW, MPI_IN_PLACE, counts, displs, ROW, root, MPI_COMM_WORLD);
+		MPI_Bcast(A + i, 1, column_t, master, MPI_COMM_WORLD);
+
+		startCol = i+1+(rank-master-1+size)%size;
+		#pragma omp parallel for shared(A,n,i,startCol,size) private(j,k)
+		for (j = i + 1; j < n; j++) {
+			for (k = startCol; k < n; k += size) {
+				A[j*n + k] -= A[j*n + i] * A[i*n + k];
 			}
 		}
 	}
-	MPI_Type_free(&ROW);
+
+	/* cyclic gathering of columns */
+	if (rank == root) {
+		j = 0;
+		for (i = 0; i < n; i++) {
+			if (j != rank) {
+				MPI_Recv(A + i, 1, column_t, j, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			}
+			if (++j == size) j = 0;
+		}
+	} else {
+		for (i = rank; i < n; i += size) {
+			MPI_Send(A + i, 1, column_t, root, tag, MPI_COMM_WORLD);
+		}
+	}
+
+	MPI_Type_free(&column_t);
 	free(tmp);
-	free(counts);
-	free(displs);
 }

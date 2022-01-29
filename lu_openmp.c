@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
 	luDecomposition(mat, n, perm);
 	endTime = omp_get_wtime();
 
-	printf("Time: %lf s\n", endTime - startTime);
+	printf("%lf\n", endTime - startTime);
 	for (i = 0; i < n; i++)
 		free(mat[i]);
 	free(mat);
@@ -59,6 +59,8 @@ void permute(double **A, int i, int j) {
 void luDecomposition(double **A, int n, int *P) {
 	int i, j, k, maxIndex;
 	double maxValue;
+	for (i = 0; i < n; i++)
+		P[i] = i;
 	for (i = 0; i < n; i++) {
 		maxValue = abs(A[i][i]);
 		maxIndex = i;
@@ -69,7 +71,9 @@ void luDecomposition(double **A, int n, int *P) {
 			}
 		}
 		permute(A, i, maxIndex);
-		P[i] = maxIndex;
+		k = P[i];
+		P[i] = P[maxIndex];
+		P[maxIndex] = k;
 
 		#pragma omp parallel for shared(A,n,i) private(j,k)
 		for (j = i + 1; j < n; j++) {

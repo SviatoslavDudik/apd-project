@@ -34,14 +34,12 @@ int main(int argc, char **argv) {
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	if (rank == root) {
-		showMatrix(mat, n, n);
 		startTime = MPI_Wtime();
 	}
 	luDecomposition(mat, n, perm);
 	if (rank == root) {
 		endTime = MPI_Wtime();
-		printf("Time: %lf s\n", endTime - startTime);
-		showMatrix(mat, n, n);
+		printf("%lf\n", endTime - startTime);
 	}
 	MPI_Finalize();
 
@@ -98,6 +96,9 @@ void luDecomposition(double *A, int n, int *P) {
 		}
 	}
 
+	for (i = 0; i < n; i++)
+		P[i] = i;
+
 	tmp = malloc(sizeof(double) * n);
 	for (i = 0; i < n; i++) {
 		master = i % size;
@@ -112,11 +113,18 @@ void luDecomposition(double *A, int n, int *P) {
 			}
 		}
 		MPI_Bcast(&maxIndex, 1, MPI_INT, master, MPI_COMM_WORLD);
+
 		permute(A, tmp, n, i, maxIndex);
-		P[i] = maxIndex;
-		for (j = i + 1; j < n; j++)
-			A[j*n + i] /= A[i*n + i];
+		k = P[i];
+		P[i] = P[maxIndex];
+		P[maxIndex] = k;
+
+		if (master == rank) {
+			for (j = i + 1; j < n; j++)
+				A[j*n + i] /= A[i*n + i];
+		}
 		MPI_Bcast(A + i, 1, column_t, master, MPI_COMM_WORLD);
+
 		startCol = i+1+(rank-master-1+size)%size;
 		for (j = i + 1; j < n; j++) {
 			for (k = startCol; k < n; k += size) {
