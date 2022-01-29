@@ -1,17 +1,9 @@
+#include "lu_mpi.h"
 #include "mpi.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-
-#define MIN -10
-#define MAX 10
-#define abs(x) ((x) >= 0 ? (x) : -(x))
-
-void showMatrix(double *mat, int m, int n);
-void memfill(int *arr, int n, int value);
-void permute(double *A, double *tmp, int n, int i, int j);
-void luDecomposition(double *A, int n, int *P);
 
 int main(int argc, char **argv) {
 	int i, n, *perm;
@@ -103,11 +95,11 @@ void luDecomposition(double *A, int n, int *P) {
 	for (i = 0; i < n; i++) {
 		master = i % size;
 		if (master == rank) {
-			maxValue = abs(A[i*n + i]);
+			maxValue = absValue(A[i*n + i]);
 			maxIndex = i;
 			for (j = i; j < n; j++) {
-				if (abs(A[j*n + i]) > maxValue) {
-					maxValue = abs(A[j*n + i]);
+				if (absValue(A[j*n + i]) > maxValue) {
+					maxValue = absValue(A[j*n + i]);
 					maxIndex = j;
 				}
 			}

@@ -1,14 +1,7 @@
+#include "lu_openmp.h"
 #include "omp.h"
 #include <stdio.h>
 #include <stdlib.h>
-
-#define MIN -10
-#define MAX 10
-#define abs(x) ((x) >= 0 ? (x) : -(x))
-
-void showMatrix(double **mat, int m, int n);
-void permute(double **A, int i, int j);
-void luDecomposition(double **A, int n, int *P);
 
 int main(int argc, char **argv) {
 	int i, j, n, *perm;
@@ -62,11 +55,11 @@ void luDecomposition(double **A, int n, int *P) {
 	for (i = 0; i < n; i++)
 		P[i] = i;
 	for (i = 0; i < n; i++) {
-		maxValue = abs(A[i][i]);
+		maxValue = absValue(A[i][i]);
 		maxIndex = i;
 		for (j = i; j < n; j++) {
-			if (abs(A[j][i]) > maxValue) {
-				maxValue = abs(A[j][i]);
+			if (absValue(A[j][i]) > maxValue) {
+				maxValue = absValue(A[j][i]);
 				maxIndex = j;
 			}
 		}
