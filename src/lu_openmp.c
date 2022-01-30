@@ -1,26 +1,22 @@
 #include "lu_openmp.h"
-#include "omp.h"
-#include <stdio.h>
-#include <stdlib.h>
 
 int main(int argc, char **argv) {
-	int i, j, n, *perm;
+	FILE *f;
+	int i, n, *perm;
 	double **mat, startTime, endTime;
 
 	if (argc < 2) {
-		fprintf(stderr, "Il faut donner la taille de la matrice\n");
+		fprintf(stderr, "Il faut donner le fichier avec la matrice\n");
 		return 1;
 	}
-	n = strtol(argv[1], NULL, 10);
-
-	mat = malloc(sizeof(double*) * n);
-	perm = malloc(sizeof(int) * n);
-	for (i = 0; i < n; i++) {
-		mat[i] = malloc(sizeof(double) * n);
-		for (j = 0; j < n; j++) {
-			mat[i][j] = (random() % (1000*(MAX - MIN)))/1000 + MIN;
-		}
+	f = fopen(argv[1], "r");
+	if (f == NULL) {
+		fprintf(stderr, "Impossible de lire le fichier\n");
+		return 1;
 	}
+	mat = readMatrix(f, &n);
+	fclose(f);
+	perm = malloc(sizeof(int) * n);
 
 	startTime = omp_get_wtime();
 	luDecomposition(mat, n, perm);
@@ -32,13 +28,29 @@ int main(int argc, char **argv) {
 	free(mat);
 }
 
-void showMatrix(double **mat, int m, int n) {
+double **readMatrix(FILE *f, int *n) {
 	int i, j;
-	for (i = 0; i < m; i++) {
-		for (j = 0; j < n; j++) {
-			printf("%lf ", mat[i][j]);
+	double **mat;
+	fscanf(f, "%d\n", n);
+	mat = malloc(sizeof(double*) * (*n));
+	for (i = 0; i < *n; i++) {
+		mat[i] = malloc(sizeof(double) * (*n));
+		for (j = 0; j < *n; j++) {
+			fscanf(f, "%lf;", mat[i] + j);
 		}
-		printf("\n");
+		fscanf(f, "\n");
+	}
+	return mat;
+}
+
+void writeMatrix(FILE *f, double **mat, int n) {
+	int i, j;
+	fprintf(f, "%d\n", n);
+	for (i = 0; i < n; i++) {
+		for (j = 0; j < n; j++) {
+			fprintf(f, "%lf;", mat[i][j]);
+		}
+		fprintf(f, "\n");
 	}
 }
 
@@ -55,14 +67,16 @@ void luDecomposition(double **A, int n, int *P) {
 	for (i = 0; i < n; i++)
 		P[i] = i;
 	for (i = 0; i < n; i++) {
-		maxValue = absValue(A[i][i]);
+		maxValue = fabs(A[i][i]);
 		maxIndex = i;
 		for (j = i; j < n; j++) {
-			if (absValue(A[j][i]) > maxValue) {
-				maxValue = absValue(A[j][i]);
+			if (fabs(A[j][i]) > maxValue) {
+				maxValue = fabs(A[j][i]);
 				maxIndex = j;
 			}
 		}
+		if (maxValue < EPSILON)
+			fprintf(stderr, "ERROR: matrix is degenerate\n");
 		permute(A, i, maxIndex);
 		k = P[i];
 		P[i] = P[maxIndex];

@@ -1,30 +1,32 @@
 #include "lu_mpi.h"
-#include "mpi.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
 
 int main(int argc, char **argv) {
-	int i, n, *perm;
+	FILE *f;
+	int n, *perm;
 	int root = 0, rank;
 	double *mat, startTime, endTime;
 
-	if (argc < 2) {
-		fprintf(stderr, "Il faut donner la taille de la matrice\n");
-		return 1;
-	}
-	n = strtol(argv[1], NULL, 10);
-
-	srandom(time(NULL));
-	mat = malloc(sizeof(double*) * n * n);
-	perm = malloc(sizeof(int) * n);
-	for (i = 0; i < n * n; i++) {
-		mat[i] = (random() % (MAX - MIN)) + MIN;
-	}
-
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	if (rank == root) {
+		if (argc < 2) {
+			fprintf(stderr, "Il faut donner le fichier avec la matrice\n");
+			return 1;
+		}
+		f = fopen(argv[1], "r");
+		if (f == NULL) {
+			fprintf(stderr, "Impossible de lire le fichier\n");
+			return 1;
+		}
+		mat = readMatrix(f, &n);
+		fclose(f);
+	}
+	MPI_Bcast(&n, 1, MPI_INT, root, MPI_COMM_WORLD);
+	perm = malloc(sizeof(int) * n);
+	if (rank != root) {
+		mat = malloc(sizeof(double) * n * n);
+	}
+
 	if (rank == root) {
 		startTime = MPI_Wtime();
 	}
@@ -39,13 +41,28 @@ int main(int argc, char **argv) {
 	free(perm);
 }
 
-void showMatrix(double *mat, int m, int n) {
+double *readMatrix(FILE *f, int *n) {
 	int i, j;
-	for (i = 0; i < m; i++) {
-		for (j = 0; j < n; j++) {
-			printf("%lf ", mat[i*n + j]);
+	double *mat;
+	fscanf(f, "%d\n", n);
+	mat = malloc(sizeof(double*) * (*n) * (*n));
+	for (i = 0; i < *n; i++) {
+		for (j = 0; j < *n; j++) {
+			fscanf(f, "%lf;", mat + i*(*n) + j);
 		}
-		printf(";\n");
+		fscanf(f, "\n");
+	}
+	return mat;
+}
+
+void writeMatrix(FILE *f, double *mat, int n) {
+	int i, j;
+	fprintf(f, "%d\n", n);
+	for (i = 0; i < n; i++) {
+		for (j = 0; j < n; j++) {
+			fprintf(f, "%lf;", mat[i*n + j]);
+		}
+		fprintf(f, "\n");
 	}
 }
 
@@ -89,14 +106,16 @@ void luDecomposition(double *A, int n, int *P) {
 	for (i = 0; i < n; i++) {
 		master = i % size;
 		if (master == rank) {
-			maxValue = absValue(A[i*n + i]);
+			maxValue = fabs(A[i*n + i]);
 			maxIndex = i;
 			for (j = i; j < n; j++) {
-				if (absValue(A[j*n + i]) > maxValue) {
-					maxValue = absValue(A[j*n + i]);
+				if (fabs(A[j*n + i]) > maxValue) {
+					maxValue = fabs(A[j*n + i]);
 					maxIndex = j;
 				}
 			}
+			if (maxValue < EPSILON)
+				fprintf(stderr, "ERROR: matrix is degenerate\n");
 		}
 		MPI_Bcast(&maxIndex, 1, MPI_INT, master, MPI_COMM_WORLD);
 

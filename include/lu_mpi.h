@@ -1,24 +1,38 @@
 /*! \file */
 #ifndef _LU_MPI_H_
 #define _LU_MPI_H_
+#include "mpi.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <math.h>
 
-/*! Minimum value to generate in the matrix */
-#define MIN -10
-/*! Maximum value to generate in the matrix */
-#define MAX 10
-/*! Macro to compute the absolute value of a number */
-#define absValue(x) ((x) >= 0 ? (x) : -(x))
+#define EPSILON 0.0001
 
 /*!
- * Print matrix.
+ * Read square matrix from a file.
+ * Reads the number of rows of the matrix on the first line.
+ * Then, reads the matrix assuming that the elements are separated
+ * by semicolons ';' and rows by newline character '\n'.
  *
- * Print matrix separating the elements by spaces and lines by semicolons ';'.
- *
- * \param mat [in] the matrix to be outputed
- * \param m [in] number of lines
- * \param n [in] number of columns
+ * \param f [in] a file opened in write mode
+ * \param n [out] number of lines
+ * \return matrix from the file, should be deallocated manually
  */
-void showMatrix(double *mat, int m, int n);
+double *readMatrix(FILE *f, int *n);
+
+/*!
+ * Write square matrix to a file.
+ * Writes the number of rows of the matrix on the first line.
+ * Then, writes the matrix separating the elements by semicolons ';'
+ * and rows by newline character '\n'.
+ *
+ * \param f [in] a file opened in write mode
+ * \param mat [in] the matrix to be written
+ * \param n [in] number of rows
+ */
+void writeMatrix(FILE *f, double *mat, int n);
 
 /*!
  * Permute two lines of a matrix.
